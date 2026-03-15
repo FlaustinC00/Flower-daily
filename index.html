@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Petrol Premium · Daily Environment Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+:root {
+  --black: #0b0c0a;
+  --offwhite: #f0ede4;
+  --gold: #c8a84b;
+  --gold-dim: #7a6429;
+  --surface: #141512;
+  --surface2: #1c1e19;
+  --surface3: #252720;
+  --border: rgba(255,255,255,0.07);
+  --text-primary: #f0ede4;
+  --text-secondary: rgba(240,237,228,0.55);
+  --text-muted: rgba(240,237,228,0.28);
+  --green: #4caf76;
+  --amber: #e6a020;
+  --red: #d94f3d;
+  --blue: #5b9bd5;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--black);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  padding-bottom: 48px;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 20px 14px;
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-logo { font-family: var(--font-display); font-weight: 800; font-size: 17px; letter-spacing: 0.04em; color: var(--gold); text-transform: uppercase; }
+.header-sub  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; }
+.refresh-btn {
+  background: var(--surface3); border: 1px solid var(--border);
+  color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px;
+  padding: 8px 14px; border-radius: 6px; cursor: pointer; letter-spacing: 0.04em;
+  display: flex; align-items: center; gap: 6px;
+}
+.refresh-btn:active { opacity: 0.7; }
+.spin { display: inline-block; }
+.spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Status bar ── */
+.status-bar {
+  background: var(--surface); padding: 8px 20px; font-size: 10px;
+  color: var(--text-muted); letter-spacing: 0.06em; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; }
+.status-dot.loading { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+.status-dot.error   { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── Setup banner ── */
+.setup-banner {
+  margin: 16px 16px 0; background: var(--surface2);
+  border: 1px solid var(--gold-dim); border-radius: 10px; padding: 14px 16px;
+}
+.setup-banner h3 { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.setup-banner p  { font-size: 11px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px; }
+.sheet-input-row { display: flex; gap: 8px; }
+.sheet-input {
+  flex: 1; background: var(--surface3); border: 1px solid var(--border);
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;
+  padding: 9px 12px; border-radius: 6px; outline: none;
+}
+.sheet-input:focus { border-color: var(--gold-dim); }
+.sheet-input::placeholder { color: var(--text-muted); }
+.load-btn {
+  background: var(--gold); color: var(--black); font-family: var(--font-display);
+  font-size: 12px; font-weight: 700; padding: 9px 16px; border-radius: 6px;
+  border: none; cursor: pointer; white-space: nowrap;
+}
+
+/* ── Alerts panel ── */
+.alerts-panel {
+  margin: 12px 16px 0; background: rgba(217,79,61,0.08);
+  border: 1px solid rgba(217,79,61,0.3); border-radius: 10px; padding: 12px 16px;
+}
+.alerts-title { font-family: var(--font-display); font-size: 10px; font-weight: 700;
+  color: var(--red); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+.alert-item { font-size: 11px; color: rgba(240,237,228,0.55); padding: 4px 0;
+  border-bottom: 1px solid rgba(217,79,61,0.12); display: flex; gap: 8px; }
+.alert-item:last-child { border-bottom: none; }
+.alert-room { font-family: var(--font-display); font-weight: 700; color: var(--red); min-width: 64px; }
+.alert-msg  { font-size: 10px; line-height: 1.5; }
+
+/* ── Section header ── */
+.section-header { padding: 20px 20px 10px; display: flex; align-items: baseline; justify-content: space-between; }
+.section-title  { font-family: var(--font-display); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+.section-count  { font-size: 10px; color: var(--text-muted); }
+
+/* ── Room cards ── */
+.rooms-list { padding: 0 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.room-card { background: var(--surface); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+.room-card.has-alert { border-color: rgba(217,79,61,0.35); }
+.room-card.has-warn  { border-color: rgba(230,160,32,0.3); }
+
+.room-card-header { padding: 14px 16px 10px; display: flex; align-items: flex-start; justify-content: space-between; cursor: pointer; }
+.room-label { font-family: var(--font-display); font-size: 22px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
+.room-sub   { font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; margin-top: 3px; text-transform: uppercase; }
+.room-date  { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+.status-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.status-pill {
+  font-family: var(--font-display); font-size: 10px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.pill-green  { background: rgba(76,175,118,0.18); color: #66bb8a; border: 1px solid rgba(76,175,118,0.25); }
+.pill-amber  { background: rgba(230,160,32,0.18); color: #ffc84a; border: 1px solid rgba(230,160,32,0.25); }
+.pill-red    { background: rgba(217,79,61,0.18); color: #e57373; border: 1px solid rgba(217,79,61,0.25); }
+.pill-grey   { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); }
+.chevron     { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; margin-top: 2px; }
+.room-card.expanded .chevron { transform: rotate(180deg); }
+
+/* ── VPD highlight ── */
+.vpd-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.vpd-cell { padding: 10px 16px; }
+.vpd-cell:first-child { border-right: 1px solid var(--border); }
+.vpd-lbl  { font-size: 9px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
+.vpd-val  { font-size: 22px; font-weight: 500; line-height: 1; font-family: var(--font-display); }
+.vpd-sub  { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+.vpd-range-bar { height: 3px; border-radius: 2px; margin-top: 6px; background: var(--surface3); overflow: hidden; }
+.vpd-range-fill { height: 100%; border-radius: 2px; }
+
+/* ── Metrics grid ── */
+.metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.metric-cell { padding: 9px 12px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.metric-cell:nth-child(3n) { border-right: none; }
+.metric-cell:nth-last-child(-n+3) { border-bottom: none; }
+.metric-lbl { font-size: 9px; color: var(--text-muted); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 2px; }
+.metric-num { font-size: 16px; font-weight: 500; line-height: 1.2; }
+.metric-sub { font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+.metric-flag { font-size: 9px; margin-top: 2px; }
+
+/* Alert flag on metric */
+.flag-red   { color: #e57373; }
+.flag-amber { color: #ffc84a; }
+.flag-green { color: #66bb8a; }
+.flag-blue  { color: #7ab8e8; }
+
+/* ── Expanded content ── */
+.expanded-content { display: none; }
+.room-card.expanded .expanded-content { display: block; }
+
+.chart-section { border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+.chart-label { font-size: 9px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.chart-wrap  { position: relative; width: 100%; height: 110px; }
+
+/* ── Foliar flag ── */
+.foliar-flag {
+  background: rgba(91,155,213,0.1); border-top: 1px solid rgba(91,155,213,0.2);
+  padding: 7px 16px; font-size: 10px; color: rgba(91,155,213,0.8);
+  letter-spacing: 0.04em;
+}
+
+  /* ── Recommendations ── */
+  .recs-section { border-top: 1px solid var(--border); padding: 0; }
+  .rec-item { padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; gap: 10px; align-items: flex-start; }
+  .rec-item:last-child { border-bottom: none; }
+  .rec-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .rec-body { flex: 1; }
+  .rec-issue { font-size: 11px; font-weight: 500; margin-bottom: 4px; line-height: 1.4; }
+  .rec-issue.sev-red   { color: #e57373; }
+  .rec-issue.sev-amber { color: #ffc84a; }
+  .rec-generic  { font-size: 10px; color: var(--text-muted); line-height: 1.5; margin-bottom: 4px; }
+  .rec-specific { font-size: 11px; color: var(--text-secondary); line-height: 1.6; background: var(--surface3); border-radius: 6px; padding: 7px 10px; margin-top: 5px; }
+  .rec-specific-label { font-size: 9px; color: var(--gold-dim); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; font-family: var(--font-display); font-weight: 700; }
+  .recs-toggle { padding: 9px 16px; font-size: 10px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); letter-spacing: 0.04em; }
+  .recs-content { display: none; }
+  .recs-content.open { display: block; }
+
+/* ── No data state ── */
+.no-data { padding: 60px 20px; text-align: center; }
+.no-data-icon  { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+.no-data-title { font-family: var(--font-display); font-size: 14px; color: var(--text-secondary); margin-bottom: 6px; }
+.no-data-sub   { font-size: 11px; color: var(--text-muted); }
+
+  /* ── VPD Reference Modal ───────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.visible { opacity: 1; pointer-events: all; }
+
+  .modal-sheet {
+    background: var(--surface2); border-radius: 18px 18px 0 0;
+    border: 1px solid var(--border); border-bottom: none;
+    width: 100%; max-width: 640px; max-height: 90vh;
+    overflow-y: auto; padding: 0 0 40px;
+    transform: translateY(30px); transition: transform 0.25s ease;
+  }
+  .modal-overlay.visible .modal-sheet { transform: translateY(0); }
+
+  .modal-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.15);
+    border-radius: 2px; margin: 12px auto 0; }
+  .modal-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; }
+  .modal-title { font-family: var(--font-display); font-size: 16px; font-weight: 800;
+    color: var(--text-primary); }
+  .modal-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .modal-close { background: var(--surface3); border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 16px; width: 30px; height: 30px;
+    border-radius: 50%; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+  /* Current week highlight */
+  .modal-week-badge {
+    margin: 14px 20px 0;
+    background: rgba(200,168,75,0.12); border: 1px solid rgba(200,168,75,0.3);
+    border-radius: 10px; padding: 12px 16px;
+  }
+  .week-badge-label { font-size: 10px; color: var(--gold-dim); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 4px; font-family: var(--font-display); font-weight: 700; }
+  .week-badge-row { display: flex; gap: 16px; align-items: baseline; }
+  .week-badge-vpd { font-family: var(--font-display); font-size: 20px; font-weight: 800; }
+  .week-badge-note { font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; }
+
+  /* Ramp chart */
+  .modal-section { padding: 14px 20px 0; }
+  .modal-section-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.08em; font-family: var(--font-display); font-weight: 700; margin-bottom: 10px; }
+  .ramp-chart-wrap { position: relative; height: 160px; width: 100%; }
+
+  /* Temp/RH combo table */
+  .combo-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+  .combo-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+    color: var(--text-muted); font-weight: 500; font-size: 10px; }
+  .combo-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-secondary); }
+  .combo-table tr:last-child td { border-bottom: none; }
+  .combo-vpd { font-weight: 500; }
+  .combo-ideal { color: #66bb8a; }
+  .combo-ok    { color: #ffc84a; }
+
+  /* Week table */
+  .week-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+  .week-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+    color: var(--text-muted); font-weight: 500; font-size: 10px; }
+  .week-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-secondary); }
+  .week-table tr.current-week td { color: var(--text-primary); background: rgba(200,168,75,0.06); }
+  .week-table tr:last-child td { border-bottom: none; }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">Petrol Premium</div>
+    <div class="header-sub">Daily Environment Monitor</div>
+  </div>
+  <button class="refresh-btn" onclick="loadData()">
+    <span class="spin" id="refreshIcon">↻</span> Refresh
+  </button>
+</div>
+
+<div class="status-bar">
+  <div><span class="status-dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+  <div id="lastUpdated"></div>
+</div>
+
+<div class="setup-banner" id="setupBanner" style="display:none;">
+  <h3>⚡ Connect Daily Sheet</h3>
+  <p>Sheet URL is pre-filled — tap Load to connect.</p>
+  <div class="sheet-input-row">
+    <input class="sheet-input" id="sheetUrl" type="url" placeholder="Paste Google Sheet link…" />
+    <button class="load-btn" onclick="loadFromInput()">Tap to Load</button>
+  </div>
+</div>
+
+<div id="mainContent" style="display:none;">
+  <div class="alerts-panel" id="alertsPanel" style="display:none;">
+    <div class="alerts-title">⚠ Today's Alerts</div>
+    <div id="alertsList"></div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title">Room Status</div>
+    <div class="section-count" id="roomCount"></div>
+  </div>
+  <div class="rooms-list" id="roomsList"></div>
+</div>
+
+<div id="emptyState" style="display:none;" class="no-data">
+  <div class="no-data-icon">🌿</div>
+  <div class="no-data-title">No data loaded</div>
+  <div class="no-data-sub">Tap Refresh or paste your sheet URL above.</div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const SHEET_ID = '1fC4dloZLE7Dqqd6EEzinw2_nOGUw_dk3Tl8FDSbHWpk';
+const SHEET_GID = '35477348';
+
+const ROOMS = ['Flower Room 1','Flower Room 2','Flower Room 3','Flower Room 4','Flower Room 4 West','Flower Room 5','Flower Room 6'];
+
+// Target ranges by flowering week (derived from cycle day)
+// week = Math.ceil(cycleDay / 7), capped at 9
+function getTargets(week) {
+  week = Math.max(1, Math.min(9, week));
+  const t = {
+    tempHigh: [76, 80], tempLow: [68, 74],
+    rhHigh: [55, 65], rhLow: [40, 55],
+    co2: [1000, 1200],
+    light: [50, 70],
+    vpdLightsOn: [0.8, 1.2], vpdLightsOff: [0.6, 1.0],
+    rhSwingMax: 20
+  };
+  if (week <= 2) {
+    t.tempHigh = [78, 83]; t.tempLow = [68, 74];
+    t.rhHigh = [65, 80]; t.rhLow = [55, 68];
+    t.co2 = [800, 1100];
+    t.light = [30, 50];
+    t.vpdLightsOn = [0.6, 1.0]; t.vpdLightsOff = [0.4, 0.8];
+  } else if (week <= 5) {
+    t.tempHigh = [76, 82]; t.tempLow = [66, 72];
+    t.rhHigh = [55, 70]; t.rhLow = [45, 60];
+    t.co2 = [1000, 1200];
+    t.light = [50, 80];
+    t.vpdLightsOn = [0.9, 1.3]; t.vpdLightsOff = [0.6, 1.0];
+  } else if (week === 6) {
+    t.tempHigh = [74, 80]; t.tempLow = [64, 70];
+    t.rhHigh = [45, 58]; t.rhLow = [35, 50];
+    t.co2 = [1000, 1200];
+    t.light = [70, 100];
+    t.vpdLightsOn = [1.0, 1.5]; t.vpdLightsOff = [0.7, 1.1];
+  } else if (week === 7) {
+    t.tempHigh = [72, 78]; t.tempLow = [64, 68];
+    t.rhHigh = [45, 55]; t.rhLow = [35, 48];
+    t.co2 = [1000, 1200];
+    t.light = [60, 75];
+    t.vpdLightsOn = [1.1, 1.6]; t.vpdLightsOff = [0.8, 1.2];
+  } else {
+    // Week 8-9
+    t.tempHigh = [70, 76]; t.tempLow = [63, 68];
+    t.rhHigh = [40, 52]; t.rhLow = [30, 45];
+    t.co2 = [800, 1100];
+    t.light = [40, 65];
+    t.vpdLightsOn = [1.1, 1.6]; t.vpdLightsOff = [0.8, 1.2];
+  }
+  return t;
+}
+
+// ── VPD Calculation ────────────────────────────────────────────────────────
+// VPD = SVP_leaf × (1 - RH/100)
+// SVP (kPa) from temp (°F): convert to °C first, then Magnus formula
+function svp(tempF) {
+  const tc = (tempF - 32) * 5 / 9;
+  return 0.6108 * Math.exp((17.27 * tc) / (tc + 237.3));
+}
+function calcVPD(tempF, rh, leafOffsetF = 2) {
+  if (tempF === null || rh === null) return null;
+  const leafTemp = tempF - leafOffsetF;
+  const vpdVal = svp(leafTemp) * (1 - rh / 100);
+  return Math.max(0, Math.round(vpdVal * 100) / 100);
+}
+
+// ── Status helpers ─────────────────────────────────────────────────────────
+function inRange(val, range) {
+  if (val === null || val === undefined) return null;
+  return val >= range[0] && val <= range[1];
+}
+function statusColor(val, range) {
+  if (val === null) return 'var(--text-muted)';
+  if (inRange(val, range)) return '#66bb8a';
+  const slack = (range[1] - range[0]) * 0.2;
+  if (val >= range[0] - slack && val <= range[1] + slack) return '#ffc84a';
+  return '#e57373';
+}
+function statusClass(val, range) {
+  if (val === null) return '';
+  if (inRange(val, range)) return 'flag-green';
+  const slack = (range[1] - range[0]) * 0.2;
+  if (val >= range[0] - slack && val <= range[1] + slack) return 'flag-amber';
+  return 'flag-red';
+}
+function vpdLabel(vpd) {
+  if (vpd === null) return '—';
+  if (vpd < 0.4) return 'Too low';
+  if (vpd < 0.8) return 'Low';
+  if (vpd <= 1.2) return 'Ideal';
+  if (vpd <= 1.6) return 'High';
+  return 'Too high';
+}
+function vpdColor(vpd) {
+  if (vpd === null) return 'var(--text-muted)';
+  if (vpd < 0.4 || vpd > 1.6) return '#e57373';
+  if (vpd < 0.8 || vpd > 1.2) return '#ffc84a';
+  return '#66bb8a';
+}
+
+// ── Parse value from multiple-choice string ───────────────────────────────
+function parseNum(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/[<>]/g, '').trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function isCo2Special(v) {
+  if (!v) return false;
+  const s = String(v).toLowerCase();
+  return s.includes('empty') || s.includes('off');
+}
+
+// ── Date parsing (gviz format) ─────────────────────────────────────────────
+function parseGvizDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  const m = String(v).match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
+  if (m) {
+    const d = new Date(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function daysBetween(a, b) {
+  return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+
+// ── Process sheet rows ─────────────────────────────────────────────────────
+// Columns: Timestamp(0) Room(1) FeedAmt(2) FeedPH(3) FeedEC(4)
+//          TempHigh(5) TempLow(6) RHHigh(7) RHLow(8) CO2(9) Light(10)
+//          Foliar(11) Notes(12)
+function processRows(rows) {
+  const byRoom = {};
+  ROOMS.forEach(r => byRoom[r] = []);
+
+  rows.forEach(row => {
+    const keys = Object.keys(row);
+    const room = row['Flower Room'] || row[keys[1]];
+    if (!room || !byRoom[room]) return;
+
+    const rawDate = row['Timestamp'] || row[keys[0]];
+    const date = parseGvizDate(rawDate instanceof Date ? rawDate : rawDate);
+    if (!date) return;
+
+    const tempHigh = parseNum(row['Temp High (°F)']  || row[keys[5]]);
+    const tempLow  = parseNum(row['Temp Low (°F)']   || row[keys[6]]);
+    const rhHigh   = parseNum(row['RH High (%)']     || row[keys[7]]);
+    const rhLow    = parseNum(row['RH Low (%)']      || row[keys[8]]);
+    const co2Raw   = row['CO2 (PPM)'] || row[keys[9]];
+    const co2      = isCo2Special(co2Raw) ? co2Raw : parseNum(co2Raw);
+    const light    = parseNum(row['Light (%)']       || row[keys[10]]);
+    const feedEc   = parseNum(row['Feed EC']         || row[keys[4]]);
+    const feedPh   = parseNum(row['Feed pH']         || row[keys[3]]);
+    const feedAmt  = parseNum(row['Feed Amount (mL)'] || row[keys[2]]);
+    const foliar   = String(row['Foliar/IPM Applied (RH Skewed)'] || row[keys[11]] || '').toLowerCase().includes('yes');
+    const notes    = row['Notes'] || row[keys[12]] || '';
+
+    // VPD: lights-on = tempHigh + rhLow, lights-off = tempLow + rhHigh
+    const vpdOn  = calcVPD(tempHigh, rhLow);
+    const vpdOff = calcVPD(tempLow, rhHigh);
+    const rhSwing = (rhHigh !== null && rhLow !== null) ? rhHigh - rhLow : null;
+
+    byRoom[room].push({ date, tempHigh, tempLow, rhHigh, rhLow, rhSwing, co2, co2Raw,
+      light, feedEc, feedPh, feedAmt, vpdOn, vpdOff, foliar, notes });
+  });
+
+  // Sort each room by date desc
+  ROOMS.forEach(r => byRoom[r].sort((a, b) => b.date - a.date));
+  return byRoom;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+let charts = {};
+
+function renderRooms(byRoom) {
+  const list = document.getElementById('roomsList');
+  list.innerHTML = '';
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const allAlerts = [];
+  let roomCount = 0;
+  const today = new Date();
+
+  ROOMS.forEach(roomName => {
+    const entries = byRoom[roomName] || [];
+    if (!entries.length) return;
+    roomCount++;
+
+    const latest = entries[0];
+    const daysStale = daysBetween(latest.date, today);
+    const dateLabel = daysStale === 0 ? 'Today' : daysStale === 1 ? 'Yesterday' : `${daysStale}d ago`;
+
+    // Hardcoded cycle start dates — update these when a room resets
+    // Format: 'Room Name': 'YYYY-MM-DD'
+    const CYCLE_STARTS = {
+      'Flower Room 1':      '2026-02-23',
+      'Flower Room 2':      '2026-03-11',
+      'Flower Room 3':      '2026-01-13',
+      'Flower Room 4':      '2026-01-26',
+      'Flower Room 4 West': '2026-01-29',
+      'Flower Room 5':      '2026-02-09',
+      'Flower Room 6':      '2026-02-11',
+    };
+    const startDate = CYCLE_STARTS[roomName] ? new Date(CYCLE_STARTS[roomName]) : null;
+    const cycleDay  = startDate ? daysBetween(startDate, today) + 1 : null;
+    const week      = cycleDay  ? Math.min(9, Math.ceil(cycleDay / 7)) : null;
+    const targets   = getTargets(week || 4);
+
+    // Build alerts for this room
+    const roomAlerts = [];
+    if (!latest.foliar) {
+      if (latest.tempHigh !== null && latest.tempHigh > targets.tempHigh[1] + 2)
+        roomAlerts.push(`Temp high ${latest.tempHigh}°F exceeds target ${targets.tempHigh[1]}°F`);
+      if (latest.tempLow !== null && latest.tempLow < targets.tempLow[0] - 2)
+        roomAlerts.push(`Temp low ${latest.tempLow}°F below target ${targets.tempLow[0]}°F`);
+      if (latest.rhHigh !== null && latest.rhHigh > targets.rhHigh[1] + 5)
+        roomAlerts.push(`RH high ${latest.rhHigh}% exceeds target ${targets.rhHigh[1]}%`);
+      if (latest.rhSwing !== null && latest.rhSwing > 20)
+        roomAlerts.push(`RH swing ${latest.rhSwing}% exceeds 20% threshold`);
+    }
+    if (typeof latest.co2 === 'string' && latest.co2.toLowerCase().includes('empty'))
+      roomAlerts.push('CO2 tank empty');
+    if (latest.vpdOn !== null && (latest.vpdOn < 0.4 || latest.vpdOn > 1.8))
+      roomAlerts.push(`Lights-on VPD ${latest.vpdOn} kPa out of range`);
+
+    if (roomAlerts.length > 0)
+      allAlerts.push({ room: roomName.replace('Flower ', ''), alerts: roomAlerts });
+
+    const overallStatus = roomAlerts.length > 1 ? 'red' : roomAlerts.length === 1 ? 'amber' : 'green';
+    const pillClass = { red: 'pill-red', amber: 'pill-amber', green: 'pill-green', grey: 'pill-grey' }[overallStatus];
+    const pillLabel = { red: 'Alert', amber: 'Watch', green: 'On Track' }[overallStatus];
+
+    // Metric display helpers
+    const fmt = (v, unit='') => v !== null && v !== undefined ? `${v}${unit}` : '—';
+    const co2Display = isCo2Special(latest.co2Raw) ? String(latest.co2Raw) : fmt(latest.co2, ' ppm');
+
+    // VPD colors
+    const vpdOnColor  = vpdColor(latest.vpdOn);
+    const vpdOffColor = vpdColor(latest.vpdOff);
+
+    // Build 7-day VPD trend data
+    const vpdOnHistory  = entries.slice(0, 10).reverse().map(e => e.vpdOn);
+    const vpdOffHistory = entries.slice(0, 10).reverse().map(e => e.vpdOff);
+
+    const foliarHtml = latest.foliar
+      ? `<div class="foliar-flag">💧 Foliar/IPM applied — RH readings may be elevated</div>` : '';
+
+    const shortName = roomName.replace('Flower ', '');
+
+    // Build recommendations
+    const recs = getRecommendations(roomName, latest, targets, week, cycleDay);
+    let recsHtml = '';
+    if (recs.length > 0) {
+      const recItems = recs.map(r => `
+        <div class="rec-item">
+          <div class="rec-icon">${r.icon}</div>
+          <div class="rec-body">
+            <div class="rec-issue sev-${r.severity}">${r.issue}</div>
+            <div class="rec-generic">${r.generic}</div>
+            <div class="rec-specific">
+              <div class="rec-specific-label">⚡ Facility Action</div>
+              ${r.specific}
+            </div>
+          </div>
+        </div>`).join('');
+      recsHtml = `
+        <div class="recs-toggle" onclick="toggleRecs(this)">
+          <span>⚡ ${recs.length} recommendation${recs.length > 1 ? 's' : ''}</span>
+          <span style="margin-left:auto">▾</span>
+        </div>
+        <div class="recs-section recs-content">
+          ${recItems}
+        </div>`;
+    }
+
+    const card = document.createElement('div');
+    card.className = `room-card ${overallStatus === 'red' ? 'has-alert' : overallStatus === 'amber' ? 'has-warn' : ''}`;
+    card.innerHTML = `
+      <div class="room-card-header" onclick="toggleCard(this)">
+        <div>
+          <div class="room-label">${shortName}</div>
+          <div class="room-date">${dateLabel} · ${latest.date.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${cycleDay ? ' · Day ' + Math.min(cycleDay, 65) + ' · Wk ' + week : ''}</div>
+        </div>
+        <div class="status-badge">
+          <span class="status-pill ${pillClass}">${pillLabel}</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      ${foliarHtml}
+      <div class="vpd-row">
+        <div class="vpd-cell" onclick="openVpdModal(${week || 4}, '${shortName}')" style="cursor:pointer">
+          <div class="vpd-lbl">VPD Lights-On <span style="color:var(--gold-dim);font-size:9px">▸ ref</span></div>
+          <div class="vpd-val" style="color:${vpdOnColor}">${latest.vpdOn !== null ? latest.vpdOn.toFixed(2) : '—'}</div>
+          <div class="vpd-sub">${vpdLabel(latest.vpdOn)} · kPa</div>
+          <div class="vpd-range-bar"><div class="vpd-range-fill" style="width:${latest.vpdOn ? Math.min(100,(latest.vpdOn/2)*100) : 0}%;background:${vpdOnColor}"></div></div>
+        </div>
+        <div class="vpd-cell" onclick="openVpdModal(${week || 4}, '${shortName}')" style="cursor:pointer">
+          <div class="vpd-lbl">VPD Lights-Off <span style="color:var(--gold-dim);font-size:9px">▸ ref</span></div>
+          <div class="vpd-val" style="color:${vpdOffColor}">${latest.vpdOff !== null ? latest.vpdOff.toFixed(2) : '—'}</div>
+          <div class="vpd-sub">${vpdLabel(latest.vpdOff)} · kPa</div>
+          <div class="vpd-range-bar"><div class="vpd-range-fill" style="width:${latest.vpdOff ? Math.min(100,(latest.vpdOff/2)*100) : 0}%;background:${vpdOffColor}"></div></div>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-cell">
+          <div class="metric-lbl">Temp High</div>
+          <div class="metric-num" style="color:${statusColor(latest.tempHigh, targets.tempHigh)}">${fmt(latest.tempHigh,'°')}</div>
+          <div class="metric-flag ${statusClass(latest.tempHigh, targets.tempHigh)}">${targets.tempHigh[0]}–${targets.tempHigh[1]}°F</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">Temp Low</div>
+          <div class="metric-num" style="color:${statusColor(latest.tempLow, targets.tempLow)}">${fmt(latest.tempLow,'°')}</div>
+          <div class="metric-flag ${statusClass(latest.tempLow, targets.tempLow)}">${targets.tempLow[0]}–${targets.tempLow[1]}°F</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">RH Swing</div>
+          <div class="metric-num" style="color:${latest.rhSwing !== null ? (latest.rhSwing > 20 ? '#e57373' : '#66bb8a') : 'var(--text-muted)'}">${latest.rhSwing !== null ? latest.rhSwing + '%' : '—'}</div>
+          <div class="metric-flag ${latest.rhSwing !== null && latest.rhSwing > 20 ? 'flag-red' : 'flag-green'}">Max 20%</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">RH High</div>
+          <div class="metric-num" style="color:${statusColor(latest.rhHigh, targets.rhHigh)}">${fmt(latest.rhHigh,'%')}</div>
+          <div class="metric-flag ${statusClass(latest.rhHigh, targets.rhHigh)}">${targets.rhHigh[0]}–${targets.rhHigh[1]}%</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">RH Low</div>
+          <div class="metric-num" style="color:${statusColor(latest.rhLow, targets.rhLow)}">${fmt(latest.rhLow,'%')}</div>
+          <div class="metric-flag ${statusClass(latest.rhLow, targets.rhLow)}">${targets.rhLow[0]}–${targets.rhLow[1]}%</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">CO2</div>
+          <div class="metric-num" style="color:${isCo2Special(latest.co2Raw) ? '#e57373' : statusColor(latest.co2, targets.co2)};font-size:${isCo2Special(latest.co2Raw)?'11px':'16px'}">${co2Display}</div>
+          <div class="metric-flag">${targets.co2[0]}–${targets.co2[1]} ppm</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">Light</div>
+          <div class="metric-num" style="color:${statusColor(latest.light, targets.light)}">${fmt(latest.light,'%')}</div>
+          <div class="metric-flag ${statusClass(latest.light, targets.light)}">${targets.light[0]}–${targets.light[1]}%</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">Feed EC</div>
+          <div class="metric-num flag-blue">${fmt(latest.feedEc)}</div>
+          <div class="metric-sub">mS/cm</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-lbl">Feed pH</div>
+          <div class="metric-num" style="color:${latest.feedPh !== null ? (latest.feedPh >= 5.7 && latest.feedPh <= 6.2 ? '#66bb8a' : '#ffc84a') : 'var(--text-muted)'}">${fmt(latest.feedPh)}</div>
+          <div class="metric-flag">5.7–6.2</div>
+        </div>
+      </div>
+      <div class="expanded-content">
+        ${entries[0].notes ? `<div style="padding:10px 16px;font-size:11px;color:var(--text-secondary);border-top:1px solid var(--border)">📝 ${entries[0].notes}</div>` : ''}
+        <div class="chart-section">
+          <div class="chart-label">VPD trend · last 10 days</div>
+          <div class="chart-wrap"><canvas id="chart-vpd-${roomName.replace(/\s+/g,'-')}"></canvas></div>
+        </div>
+        <div class="chart-section" style="border-top:1px solid var(--border)">
+          <div class="chart-label">Temp & RH trend · last 10 days</div>
+          <div class="chart-wrap"><canvas id="chart-env-${roomName.replace(/\s+/g,'-')}"></canvas></div>
+        </div>
+        ${recsHtml}
+      </div>
+    `;
+    list.appendChild(card);
+
+    // Build charts after DOM insert
+    requestAnimationFrame(() => {
+      buildVpdChart(roomName, vpdOnHistory, vpdOffHistory);
+      buildEnvChart(roomName, entries.slice(0,10).reverse());
+    });
+  });
+
+  // Alerts panel
+  const alertsPanel = document.getElementById('alertsPanel');
+  const alertsList  = document.getElementById('alertsList');
+  alertsList.innerHTML = '';
+  if (allAlerts.length > 0) {
+    alertsPanel.style.display = 'block';
+    allAlerts.forEach(a => {
+      a.alerts.forEach(msg => {
+        const el = document.createElement('div');
+        el.className = 'alert-item';
+        el.innerHTML = `<span class="alert-room">${a.room}</span><span class="alert-msg">${msg}</span>`;
+        alertsList.appendChild(el);
+      });
+    });
+  } else {
+    alertsPanel.style.display = 'none';
+  }
+
+  document.getElementById('roomCount').textContent = `${roomCount} rooms`;
+}
+
+function buildVpdChart(roomName, vpdOn, vpdOff) {
+  const id = `chart-vpd-${roomName.replace(/\s+/g,'-')}`;
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (charts[id]) charts[id].destroy();
+  const labels = vpdOn.map((_, i) => `D-${vpdOn.length - i}`);
+  charts[id] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Lights On', data: vpdOn, borderColor: '#e6a020', backgroundColor: 'rgba(230,160,32,0.08)', borderWidth: 1.5, pointRadius: 2, tension: 0.35, fill: false },
+        { label: 'Lights Off', data: vpdOff, borderColor: '#5b9bd5', backgroundColor: 'rgba(91,155,213,0.08)', borderWidth: 1.5, pointRadius: 2, tension: 0.35, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, labels: { color: 'rgba(240,237,228,0.4)', font: { size: 9, family: 'DM Mono' }, boxWidth: 10, padding: 10 } },
+        tooltip: { backgroundColor: '#1c1e19', titleColor: '#f0ede4', bodyColor: '#f0ede4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) + ' kPa' : '—'}` } } },
+      scales: {
+        x: { display: false },
+        y: { min: 0, max: 2.0, grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: 'rgba(240,237,228,0.3)', font: { size: 9 }, maxTicksLimit: 4 }, border: { color: 'transparent' } }
+      }
+    }
+  });
+}
+
+function buildEnvChart(roomName, entries) {
+  const id = `chart-env-${roomName.replace(/\s+/g,'-')}`;
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (charts[id]) charts[id].destroy();
+  const labels = entries.map(e => e.date.toLocaleDateString('en-US',{month:'numeric',day:'numeric'}));
+  charts[id] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Temp H', data: entries.map(e => e.tempHigh), borderColor: '#d94f3d', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 2, tension: 0.3, yAxisID: 'yTemp' },
+        { label: 'Temp L', data: entries.map(e => e.tempLow),  borderColor: 'rgba(217,79,61,0.4)', backgroundColor: 'transparent', borderWidth: 1, pointRadius: 0, tension: 0.3, borderDash: [3,3], yAxisID: 'yTemp' },
+        { label: 'RH H',   data: entries.map(e => e.rhHigh),   borderColor: '#5b9bd5', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 2, tension: 0.3, yAxisID: 'yRh' },
+        { label: 'RH L',   data: entries.map(e => e.rhLow),    borderColor: 'rgba(91,155,213,0.4)', backgroundColor: 'transparent', borderWidth: 1, pointRadius: 0, tension: 0.3, borderDash: [3,3], yAxisID: 'yRh' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, labels: { color: 'rgba(240,237,228,0.4)', font: { size: 9, family: 'DM Mono' }, boxWidth: 10, padding: 8 } },
+        tooltip: { backgroundColor: '#1c1e19', titleColor: '#f0ede4', bodyColor: '#f0ede4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
+      scales: {
+        x: { ticks: { color: 'rgba(240,237,228,0.3)', font: { size: 9 }, maxRotation: 0 }, grid: { display: false }, border: { color: 'transparent' } },
+        yTemp: { min: 55, max: 95, position: 'left', grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(240,237,228,0.3)', font: { size: 9 }, maxTicksLimit: 4 }, border: { color: 'transparent' } },
+        yRh:   { min: 20, max: 100, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: 'rgba(91,155,213,0.5)', font: { size: 9 }, maxTicksLimit: 4 }, border: { color: 'transparent' } }
+      }
+    }
+  });
+}
+
+function toggleRecs(el) {
+  const content = el.nextElementSibling;
+  content.classList.toggle('open');
+  const arrow = el.querySelector('span:last-child');
+  if (arrow) arrow.textContent = content.classList.contains('open') ? '▴' : '▾';
+}
+
+function toggleCard(header) {
+  header.closest('.room-card').classList.toggle('expanded');
+}
+
+// ── gviz JSONP fetch ───────────────────────────────────────────────────────
+let _cbIdx = 0;
+function gvizQuery(sheetId, gid, callback) {
+  const cb  = `_gvizCb${_cbIdx++}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json;responseHandler:${cb}&tq=${encodeURIComponent('select *')}&headers=1&gid=${gid}`;
+  window[cb] = (response) => { delete window[cb]; document.head.removeChild(script); callback(null, response); };
+  const script = document.createElement('script');
+  script.onerror = () => { delete window[cb]; document.head.removeChild(script); callback(new Error('Load failed')); };
+  script.src = url;
+  document.head.appendChild(script);
+}
+
+function parseGvizResponse(response) {
+  const cols     = response.table.cols.map(c => c.label || c.id);
+  const colTypes = response.table.cols.map(c => c.type);
+  return response.table.rows.map(row => {
+    const obj = {};
+    row.c.forEach((cell, i) => {
+      if (!cell) { obj[cols[i]] = null; return; }
+      if (colTypes[i] === 'datetime' || colTypes[i] === 'date') {
+        obj[cols[i]] = parseGvizDate(cell.v);
+      } else {
+        obj[cols[i]] = cell.v;
+      }
+    });
+    return obj;
+  });
+}
+
+function setStatus(state, text) {
+  document.getElementById('statusDot').className = 'status-dot ' + (state === 'ok' ? '' : state);
+  document.getElementById('statusText').textContent = text;
+}
+
+function loadData(sheetId) {
+  const icon = document.getElementById('refreshIcon');
+  icon.classList.add('spinning');
+  setStatus('loading', 'Connecting…');
+
+  gvizQuery(sheetId || SHEET_ID, SHEET_GID, (err, response) => {
+    if (err || !response || !response.table) {
+      setStatus('error', 'Could not reach sheet — check sharing settings');
+      document.getElementById('setupBanner').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'block';
+      icon.classList.remove('spinning');
+      return;
+    }
+    try {
+      const rows = parseGvizResponse(response);
+      if (!rows || rows.length < 1) {
+        setStatus('error', 'No data found in sheet');
+        icon.classList.remove('spinning');
+        return;
+      }
+      const byRoom = processRows(rows);
+      renderRooms(byRoom);
+      document.getElementById('mainContent').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('setupBanner').style.display = 'none';
+      setStatus('ok', `${rows.length} entries loaded`);
+      document.getElementById('lastUpdated').textContent =
+        'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      icon.classList.remove('spinning');
+    } catch(e) {
+      console.error('Parse error:', e);
+      setStatus('error', 'Failed to parse sheet data');
+      icon.classList.remove('spinning');
+    }
+  });
+}
+
+function loadFromInput() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) { loadData(); return; }
+  const match = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  loadData(match ? match[1] : raw);
+}
+
+
+// ── VPD Reference Modal ────────────────────────────────────────────────────
+const WEEK_NOTES = {
+  1: "Early stretch phase. Keep humidity high and VPD low to support rapid cell expansion. Don't stress plants — let them establish.",
+  2: "Continued stretch. Slowly begin raising VPD. Watch for heat stress if pushing temp highs above 82°F.",
+  3: "Bud sites forming. Begin VPD ramp in earnest. This is when salt stress from high EC and high VPD compound — monitor both.",
+  4: "Bulking phase begins. Push VPD higher to drive transpiration and nutrient uptake. RH should be trending down.",
+  5: "Peak bulking. Maximum light intensity window. VPD can be pushed hard if temp and humidity are dialed. Watch for PM risk if RH spikes.",
+  6: "Finishing begins. Start cooling lows, push RH below 55%. High VPD drives resin production. Critical phase — do not let RH creep back up.",
+  7: "Late finish. Begin light pullback. Maintain low RH aggressively. VPD lights-off is now as important as lights-on.",
+  8: "Final ripening. Reduce feeding, continue low RH. Some cultivars benefit from temperature stress (cooler nights) to push color and terpenes.",
+  9: "Pre-harvest. Flush window. Keep environment stable, humidity low. Any RH spike risks mold on dense buds at this stage.",
+};
+
+const WEEK_DATA = [
+  { week: 1, vpdOnMin: 0.6, vpdOnMax: 1.0, vpdOffMin: 0.4, vpdOffMax: 0.8, tempMin: 78, tempMax: 83, rhMin: 60, rhMax: 80 },
+  { week: 2, vpdOnMin: 0.7, vpdOnMax: 1.1, vpdOffMin: 0.5, vpdOffMax: 0.9, tempMin: 78, tempMax: 83, rhMin: 58, rhMax: 78 },
+  { week: 3, vpdOnMin: 0.8, vpdOnMax: 1.2, vpdOffMin: 0.6, vpdOffMax: 1.0, tempMin: 76, tempMax: 82, rhMin: 55, rhMax: 72 },
+  { week: 4, vpdOnMin: 0.9, vpdOnMax: 1.3, vpdOffMin: 0.6, vpdOffMax: 1.0, tempMin: 76, tempMax: 80, rhMin: 50, rhMax: 65 },
+  { week: 5, vpdOnMin: 1.0, vpdOnMax: 1.4, vpdOffMin: 0.7, vpdOffMax: 1.1, tempMin: 76, tempMax: 80, rhMin: 45, rhMax: 60 },
+  { week: 6, vpdOnMin: 1.0, vpdOnMax: 1.5, vpdOffMin: 0.7, vpdOffMax: 1.1, tempMin: 74, tempMax: 80, rhMin: 38, rhMax: 55 },
+  { week: 7, vpdOnMin: 1.1, vpdOnMax: 1.6, vpdOffMin: 0.8, vpdOffMax: 1.2, tempMin: 72, tempMax: 78, rhMin: 35, rhMax: 52 },
+  { week: 8, vpdOnMin: 1.1, vpdOnMax: 1.6, vpdOffMin: 0.8, vpdOffMax: 1.2, tempMin: 70, tempMax: 76, rhMin: 30, rhMax: 48 },
+  { week: 9, vpdOnMin: 1.0, vpdOnMax: 1.5, vpdOffMin: 0.7, vpdOffMax: 1.1, tempMin: 68, tempMax: 74, rhMin: 28, rhMax: 45 },
+];
+
+let rampChartInstance = null;
+
+function openVpdModal(week, roomName) {
+  week = Math.max(1, Math.min(9, week || 4));
+  const wd = WEEK_DATA[week - 1];
+  const note = WEEK_NOTES[week];
+
+  // Header
+  document.getElementById('modalTitle').textContent = roomName ? `${roomName} — Week ${week}` : `VPD Reference — Week ${week}`;
+  document.getElementById('modalSubtitle').textContent = 'Tap outside to close';
+  document.getElementById('modalWeekLabel').textContent = `Week ${week} Target Range`;
+  document.getElementById('modalVpdOn').textContent  = `${wd.vpdOnMin}–${wd.vpdOnMax} kPa`;
+  document.getElementById('modalVpdOff').textContent = `${wd.vpdOffMin}–${wd.vpdOffMax} kPa`;
+  document.getElementById('modalNote').textContent   = note;
+  document.getElementById('comboTitle').textContent  = `Temp / RH Combinations — Week ${week}`;
+
+  // Week table
+  const tbody = document.getElementById('weekTableBody');
+  tbody.innerHTML = '';
+  WEEK_DATA.forEach(w => {
+    const tr = document.createElement('tr');
+    if (w.week === week) tr.className = 'current-week';
+    tr.innerHTML = `
+      <td>Wk ${w.week}</td>
+      <td>${w.vpdOnMin}–${w.vpdOnMax}</td>
+      <td>${w.vpdOffMin}–${w.vpdOffMax}</td>
+      <td>${w.tempMin}–${w.tempMax}°F</td>
+      <td>${w.rhMin}–${w.rhMax}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Temp/RH combo table for this week
+  const comboBody = document.getElementById('comboTableBody');
+  comboBody.innerHTML = '';
+  const temps = [];
+  for (let t = wd.tempMin; t <= wd.tempMax; t += 2) temps.push(t);
+  const rhs = [];
+  for (let r = wd.rhMin; r <= wd.rhMax; r += 5) rhs.push(r);
+
+  temps.forEach(temp => {
+    rhs.forEach(rh => {
+      const vpd = calcVPD(temp, rh);
+      if (vpd === null) return;
+      const inTarget = vpd >= wd.vpdOnMin && vpd <= wd.vpdOnMax;
+      const close    = vpd >= wd.vpdOnMin - 0.1 && vpd <= wd.vpdOnMax + 0.1;
+      if (!close) return;
+      const tr = document.createElement('tr');
+      const cls = inTarget ? 'combo-ideal' : 'combo-ok';
+      const label = inTarget ? '✓ Ideal' : '~ Close';
+      tr.innerHTML = `<td>${temp}°F</td><td>${rh}%</td><td class="combo-vpd ${cls}">${vpd.toFixed(2)}</td><td class="${cls}">${label}</td>`;
+      comboBody.appendChild(tr);
+    });
+  });
+
+  // Ramp chart
+  buildRampChart(week);
+
+  // Show modal
+  document.getElementById('vpdModal').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function buildRampChart(currentWeek) {
+  const canvas = document.getElementById('rampChart');
+  if (!canvas) return;
+  if (rampChartInstance) rampChartInstance.destroy();
+
+  const labels = WEEK_DATA.map(w => `Wk ${w.week}`);
+  const onMid  = WEEK_DATA.map(w => +((w.vpdOnMin + w.vpdOnMax) / 2).toFixed(2));
+  const offMid = WEEK_DATA.map(w => +((w.vpdOffMin + w.vpdOffMax) / 2).toFixed(2));
+  const onMin  = WEEK_DATA.map(w => w.vpdOnMin);
+  const onMax  = WEEK_DATA.map(w => w.vpdOnMax);
+
+  // Highlight current week point
+  const pointColors = WEEK_DATA.map((w, i) =>
+    w.week === currentWeek ? '#c8a84b' : 'rgba(230,160,32,0.5)');
+  const pointRadii = WEEK_DATA.map((w, i) =>
+    w.week === currentWeek ? 6 : 3);
+
+  rampChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Lights On (target)',
+          data: onMid,
+          borderColor: '#e6a020',
+          backgroundColor: 'rgba(230,160,32,0.08)',
+          borderWidth: 2,
+          pointBackgroundColor: pointColors,
+          pointRadius: pointRadii,
+          tension: 0.4, fill: false
+        },
+        {
+          label: 'Lights Off (target)',
+          data: offMid,
+          borderColor: '#5b9bd5',
+          backgroundColor: 'rgba(91,155,213,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.4, fill: false
+        },
+        {
+          label: 'On range',
+          data: onMax,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(230,160,32,0.07)',
+          borderWidth: 0, pointRadius: 0, tension: 0.4, fill: '+1'
+        },
+        {
+          label: 'On range low',
+          data: onMin,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          borderWidth: 0, pointRadius: 0, tension: 0.4, fill: false
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: true, labels: {
+          filter: item => item.text !== 'On range' && item.text !== 'On range low',
+          color: 'rgba(240,237,228,0.45)', font: { size: 10, family: 'DM Mono' }, boxWidth: 12, padding: 12
+        }},
+        tooltip: {
+          backgroundColor: '#141512', titleColor: '#f0ede4', bodyColor: '#f0ede4',
+          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} kPa` }
+        },
+        annotation: currentWeek ? {
+          annotations: {
+            weekLine: {
+              type: 'line', xMin: currentWeek - 1, xMax: currentWeek - 1,
+              borderColor: 'rgba(200,168,75,0.4)', borderWidth: 1, borderDash: [4,4]
+            }
+          }
+        } : {}
+      },
+      scales: {
+        x: { ticks: { color: 'rgba(240,237,228,0.4)', font: { size: 10 } }, grid: { display: false }, border: { color: 'transparent' } },
+        y: { min: 0.2, max: 2.0, title: { display: true, text: 'VPD (kPa)', color: 'rgba(240,237,228,0.3)', font: { size: 9 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: 'rgba(240,237,228,0.4)', font: { size: 9 }, maxTicksLimit: 5 },
+          border: { color: 'transparent' } }
+      }
+    }
+  });
+}
+
+function closeVpdModal(e) {
+  if (e.target === document.getElementById('vpdModal')) closeVpdModalBtn();
+}
+function closeVpdModalBtn() {
+  document.getElementById('vpdModal').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+
+// ── If/Then Recommendation Engine ─────────────────────────────────────────
+function getRoomDehuCount(roomName) {
+  return (roomName.includes('2') || roomName.includes('3')) ? 4 : 2;
+}
+
+function getRecommendations(roomName, latest, targets, week, cycleDay) {
+  const recs = [];
+  const dehuCount = getRoomDehuCount(roomName);
+  const lateFlower = cycleDay !== null && cycleDay > 42;
+
+  // ── Temperature ──────────────────────────────────────────────────────────
+  if (latest.tempHigh !== null) {
+    if (latest.tempHigh > targets.tempHigh[1] + 1) {
+      recs.push({
+        metric: 'Temp High',
+        severity: latest.tempHigh > targets.tempHigh[1] + 4 ? 'red' : 'amber',
+        icon: '🌡️',
+        issue: `Temp high ${latest.tempHigh}°F — target max ${targets.tempHigh[1]}°F`,
+        generic: 'Check for warm pockets across the canopy. Reduce thermostat setpoints and increase air circulation.',
+        specific: `Check all 6 thermostats — identify which zones are running hot. Lower AC setpoints on affected units. If temp is still climbing, plug in the auxiliary exhaust fan${lateFlower ? ' (expected to already be running this late in flower)' : ' and set on a timer if this is a temporary spike'}.`
+      });
+    }
+    if (latest.tempHigh < targets.tempHigh[0] - 2) {
+      recs.push({
+        metric: 'Temp Low',
+        severity: 'amber',
+        icon: '🌡️',
+        issue: `Temp high only ${latest.tempHigh}°F — below target min ${targets.tempHigh[0]}°F`,
+        generic: 'Raise thermostat setpoints. Check heat source is operational.',
+        specific: `Raise thermostat setpoints across the room. Verify the heat unit is running — only 1 thermostat controls heat per room. If nighttime lows are the issue, check temp low reading as well.`
+      });
+    }
+  }
+  if (latest.tempLow !== null && latest.tempLow < targets.tempLow[0] - 2) {
+    recs.push({
+      metric: 'Temp Low',
+      severity: latest.tempLow < targets.tempLow[0] - 5 ? 'red' : 'amber',
+      icon: '🌡️',
+      issue: `Temp low ${latest.tempLow}°F — target min ${targets.tempLow[0]}°F`,
+      generic: 'Lights-off temps too cold. Raise nighttime heating setpoint.',
+      specific: `Check the heating thermostat setpoint — raise it to bring nighttime lows up. ${week >= 6 ? 'Note: some temp differential lights-on/off is intentional in late flower to push terpenes, but below ' + targets.tempLow[0] + '°F is too cold.' : 'Cold nights in early-mid flower slow growth and can stress root zone.'}`
+    });
+  }
+
+  // ── RH High ──────────────────────────────────────────────────────────────
+  if (latest.rhHigh !== null && !latest.foliar) {
+    if (latest.rhHigh > targets.rhHigh[1] + 3) {
+      recs.push({
+        metric: 'RH High',
+        severity: latest.rhHigh > targets.rhHigh[1] + 8 ? 'red' : 'amber',
+        icon: '💧',
+        issue: `RH high ${latest.rhHigh}% — target max ${targets.rhHigh[1]}%`,
+        generic: 'Increase dehumidification capacity. Improve air circulation. Check for standing water or irrigation runoff.',
+        specific: `First action: verify all ${dehuCount} dehumidifiers are running and set correctly — check that none have tripped or filled their reservoirs. ${latest.rhHigh > 70 && week >= 5 ? '⚠️ RH above 70% in week ' + week + ' is a significant mold risk — treat urgently.' : ''} Secondary: plug in auxiliary exhaust fan${lateFlower ? ' (should already be on at day ' + cycleDay + ')' : ' and run on timer to support dehu'}. Check for any standing runoff in trays that may be adding humidity load.`
+      });
+    }
+    if (latest.rhHigh < targets.rhHigh[0] - 5 && week <= 4) {
+      recs.push({
+        metric: 'RH Low',
+        severity: 'amber',
+        icon: '💧',
+        issue: `RH high only ${latest.rhHigh}% — below target for week ${week}`,
+        generic: 'RH too low for this phase. Consider reducing dehumidifier runtime or adding a humidifier.',
+        specific: `RH is low for week ${week} — early flower benefits from higher humidity for cell expansion. Consider dialing back dehumidifier setpoints. Plants will naturally raise RH through transpiration as canopy develops.`
+      });
+    }
+  }
+
+  // ── RH Low ───────────────────────────────────────────────────────────────
+  if (latest.rhLow !== null && latest.rhLow < targets.rhLow[0] - 5 && week <= 3) {
+    recs.push({
+      metric: 'RH Low',
+      severity: 'amber',
+      icon: '💧',
+      issue: `RH low ${latest.rhLow}% — unusually dry for week ${week}`,
+      generic: 'Lights-off RH too low for early flower. Check dehumidifiers are not over-running overnight.',
+      specific: `Lights-off RH of ${latest.rhLow}% is low for week ${week}. Check dehumidifier setpoints overnight — they may be running too aggressively. Early flower needs higher RH for healthy cell expansion.`
+    });
+  }
+
+  // ── RH Swing ─────────────────────────────────────────────────────────────
+  if (latest.rhSwing !== null && latest.rhSwing > 20) {
+    recs.push({
+      metric: 'RH Swing',
+      severity: latest.rhSwing > 28 ? 'red' : 'amber',
+      icon: '📊',
+      issue: `RH swing ${latest.rhSwing}% — exceeds 20% threshold`,
+      generic: 'Wide RH swings stress plants and increase mold risk. Aim to keep swings within 15-20%.',
+      specific: `A ${latest.rhSwing}% swing indicates the room is cycling hard between lights-on transpiration and lights-off dehumidification. ${latest.foliar ? 'Note: foliar was applied today which will amplify this reading.' : ''} Check dehumidifier setpoints — consider tightening the band between on/off triggers. Auxiliary exhaust fan during lights-on transition can smooth the curve.`
+    });
+  }
+
+  // ── CO2 ──────────────────────────────────────────────────────────────────
+  if (latest.co2Raw !== null) {
+    const co2Str = String(latest.co2Raw).toLowerCase();
+    if (co2Str.includes('empty')) {
+      recs.push({
+        metric: 'CO2',
+        severity: 'red',
+        icon: '🫧',
+        issue: 'CO2 tank empty',
+        generic: 'Contact CO2 supplier immediately for emergency refill. Monitor plant stress — CO2 deprivation reduces growth rate significantly.',
+        specific: `Tank is empty — contact your auto-fill supplier to expedite refill. ${lateFlower ? 'At day ' + cycleDay + ' you are past the day ~42 cutoff anyway — confirm if CO2 should be back on or if this is intentional.' : 'In the meantime plants will run on ambient CO2 (~400ppm) which significantly limits photosynthesis. Consider reducing light intensity temporarily to match CO2 availability.'}`
+      });
+    } else if (co2Str.includes('off')) {
+      if (!lateFlower) {
+        recs.push({
+          metric: 'CO2',
+          severity: 'amber',
+          icon: '🫧',
+          issue: `CO2 off — room is day ${cycleDay || '?'}`,
+          generic: 'CO2 is off. Verify this is intentional for this stage of flower.',
+          specific: `CO2 is logged as off${cycleDay ? ' at day ' + cycleDay : ''}. CO2 is typically unplugged after day ~42 — ${cycleDay && cycleDay < 40 ? 'you are before that cutoff, verify this is intentional.' : 'this appears to be within the expected window.'} Reminder: each room CO2 monitor has a photocell to prevent enrichment during dark cycle.`
+        });
+      }
+    } else if (typeof latest.co2 === 'number') {
+      const weekTarget = targets.co2;
+      if (latest.co2 < weekTarget[0] - 100 && !lateFlower) {
+        recs.push({
+          metric: 'CO2',
+          severity: 'amber',
+          icon: '🫧',
+          issue: `CO2 ${latest.co2}ppm — below week ${week} target of ${weekTarget[0]}–${weekTarget[1]}ppm`,
+          generic: 'CO2 reading below target. Check supply line, monitor setpoint, and that enrichment is active during lights-on.',
+          specific: `CO2 is below target for week ${week}. Check: (1) tank pressure — may be running low before next auto-fill, (2) monitor setpoint is correct for this week, (3) photocell is not falsely triggering off. Week ${week} target is ${weekTarget[0]}–${weekTarget[1]}ppm.`
+        });
+      }
+    }
+  }
+
+  // ── Light Intensity ───────────────────────────────────────────────────────
+  if (latest.light !== null) {
+    if (latest.light < targets.light[0] - 5) {
+      recs.push({
+        metric: 'Light',
+        severity: latest.light < targets.light[0] - 15 ? 'red' : 'amber',
+        icon: '☀️',
+        issue: `Light ${latest.light}% — below week ${week} target of ${targets.light[0]}–${targets.light[1]}%`,
+        generic: 'Light intensity below target. Increase controller setpoint to match current growth phase.',
+        specific: `Light setpoint is ${latest.light}% — week ${week} target is ${targets.light[0]}–${targets.light[1]}%. ${latest.foliar ? '💡 Foliar/IPM was applied today — confirm lights were restored to correct setpoint after spray. This is a common miss after spray applications.' : 'Check controller setpoint and increase to target range. Verify no fixtures are offline or dimmed.'}`
+      });
+    }
+    if (latest.light > targets.light[1] + 10) {
+      recs.push({
+        metric: 'Light',
+        severity: 'amber',
+        icon: '☀️',
+        issue: `Light ${latest.light}% — above week ${week} target of ${targets.light[0]}–${targets.light[1]}%`,
+        generic: 'Light intensity above target range. High intensity without matching VPD/CO2 can cause light stress.',
+        specific: `Running ${latest.light}% in week ${week} — above the ${targets.light[1]}% target. High light without matching CO2 and VPD can cause bleaching or light stress, especially in week ${week <= 2 ? 'early stretch' : week >= 7 ? 'late finish' : 'this phase'}. Consider reducing to target range unless all other parameters are dialed.`
+      });
+    }
+  }
+
+  // ── VPD out of range ──────────────────────────────────────────────────────
+  if (latest.vpdOn !== null) {
+    if (latest.vpdOn > targets.vpdLightsOn[1] + 0.2) {
+      recs.push({
+        metric: 'VPD',
+        severity: latest.vpdOn > targets.vpdLightsOn[1] + 0.4 ? 'red' : 'amber',
+        icon: '🌬️',
+        issue: `Lights-on VPD ${latest.vpdOn.toFixed(2)} kPa — above target ${targets.vpdLightsOn[1]} kPa`,
+        generic: 'VPD too high during lights-on. Plants are transpiring faster than they can uptake water — risk of tip burn and stress.',
+        specific: `High lights-on VPD of ${latest.vpdOn.toFixed(2)} kPa. To lower VPD: raise RH (back off dehumidifiers slightly) and/or lower temp slightly. Check dehumidifier setpoints — they may be pulling too hard during the day. ${week >= 6 ? 'Note: higher VPD in weeks 6-9 is intentional for resin — ensure this is within your finishing targets.' : ''}`
+      });
+    }
+    if (latest.vpdOn < targets.vpdLightsOn[0] - 0.15) {
+      recs.push({
+        metric: 'VPD',
+        severity: 'amber',
+        icon: '🌬️',
+        issue: `Lights-on VPD ${latest.vpdOn.toFixed(2)} kPa — below target ${targets.vpdLightsOn[0]} kPa`,
+        generic: 'VPD too low during lights-on. Transpiration is sluggish — nutrient uptake and growth rate will be reduced.',
+        specific: `Low lights-on VPD of ${latest.vpdOn.toFixed(2)} kPa. To raise VPD: increase temp slightly and/or reduce RH. Run dehumidifiers harder during lights-on period. ${week <= 2 ? 'Note: lower VPD is normal in weeks 1-2 — only act if well below target.' : ''}`
+      });
+    }
+  }
+
+  return recs;
+}
+window.addEventListener('load', () => {
+  const input = document.getElementById('sheetUrl');
+  if (input) input.value = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
+  loadData();
+});
+</script>
+
+<!-- VPD Reference Modal -->
+<div class="modal-overlay" id="vpdModal" onclick="closeVpdModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">VPD Reference</div>
+        <div class="modal-subtitle" id="modalSubtitle">Flower cycle targets</div>
+      </div>
+      <button class="modal-close" onclick="closeVpdModalBtn()">✕</button>
+    </div>
+
+    <!-- Current week highlight -->
+    <div class="modal-week-badge">
+      <div class="week-badge-label" id="modalWeekLabel">Week — Target</div>
+      <div class="week-badge-row">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">Lights On</div>
+          <div class="week-badge-vpd" id="modalVpdOn" style="color:#e6a020"></div>
+        </div>
+        <div style="margin-left:24px">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">Lights Off</div>
+          <div class="week-badge-vpd" id="modalVpdOff" style="color:#5b9bd5"></div>
+        </div>
+      </div>
+      <div class="week-badge-note" id="modalNote"></div>
+    </div>
+
+    <!-- Full ramp chart -->
+    <div class="modal-section">
+      <div class="modal-section-title">Full Cycle VPD Ramp</div>
+      <div class="ramp-chart-wrap"><canvas id="rampChart"></canvas></div>
+    </div>
+
+    <!-- Week by week table -->
+    <div class="modal-section" style="margin-top:16px">
+      <div class="modal-section-title">Week-by-Week Targets</div>
+      <table class="week-table">
+        <thead><tr><th>Week</th><th>Lights On VPD</th><th>Lights Off VPD</th><th>Temp Range</th><th>RH Range</th></tr></thead>
+        <tbody id="weekTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Temp/RH combos -->
+    <div class="modal-section" style="margin-top:16px">
+      <div class="modal-section-title" id="comboTitle">Temp / RH Combinations — This Week</div>
+      <table class="combo-table">
+        <thead><tr><th>Temp (°F)</th><th>RH (%)</th><th>VPD (kPa)</th><th>Status</th></tr></thead>
+        <tbody id="comboTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
